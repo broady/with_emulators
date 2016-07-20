@@ -29,7 +29,7 @@ func main() {
 	}
 	pubsub := &PubSub{}
 	if err := pubsub.Start(); err != nil {
-		log.Fatalf("Could not start datastore: %v", err)
+		log.Fatalf("Could not start pubsub: %v", err)
 	}
 
 	datastore.WaitReady()
@@ -49,7 +49,7 @@ func main() {
 		log.Fatalf("Could not stop datastore: %v", err)
 	}
 	if err := pubsub.Stop(); err != nil {
-		log.Fatalf("Could not stop datastore: %v", err)
+		log.Fatalf("Could not stop pubsub: %v", err)
 	}
 	if cmdErr != nil {
 		log.Fatal(cmdErr)
