@@ -35,11 +35,20 @@ func main() {
 	}
 	forwardSignals()
 
-	datastore := &Datastore{}
+	datastore := &Emulator{
+		Command:       []string{"gcloud", "-q", "beta", "emulators", "pubsub", "start"},
+		EnvCommand:    []string{"gcloud", "-q", "beta", "emulators", "pubsub", "env-init"},
+		ReadySentinel: "Server started, listening",
+	}
 	if err := datastore.Start(); err != nil {
 		log.Fatalf("Could not start datastore: %v", err)
 	}
-	pubsub := &PubSub{}
+
+	pubsub := &Emulator{
+		Command:       []string{"gcloud", "-q", "beta", "emulators", "datastore", "start", "--no-legacy"},
+		EnvCommand:    []string{"gcloud", "-q", "beta", "emulators", "datastore", "env-init"},
+		ReadySentinel: "is now running",
+	}
 	if err := pubsub.Start(); err != nil {
 		log.Fatalf("Could not start pubsub: %v", err)
 	}
@@ -68,48 +77,52 @@ func main() {
 	}
 }
 
-type PubSub struct {
+type Emulator struct {
 	cmd   *exec.Cmd
 	ready chan struct{}
+
+	Command       []string
+	EnvCommand    []string
+	ReadySentinel string
 }
 
-func (j *PubSub) Start() error {
-	if j.ready != nil {
-		return errors.New("pubsub: already started")
+func (e *Emulator) Start() error {
+	if e.ready != nil {
+		return errors.New("already started")
 	}
-	j.ready = make(chan struct{})
+	e.ready = make(chan struct{})
 
-	j.cmd = exec.Command("gcloud", "-q", "beta", "emulators", "pubsub", "start")
-	j.cmd.SysProcAttr = sysprocattr()
+	e.cmd = exec.Command(e.Command[0], e.Command[1:]...)
+	e.cmd.SysProcAttr = sysprocattr()
 	out := ioutil.Discard
 	if *verbose {
 		out = os.Stderr
 	}
-	j.cmd.Stderr = &watchFor{
+	e.cmd.Stderr = &watchFor{
 		base:     out,
-		sentinel: "Server started, listening",
-		c:        j.ready,
+		sentinel: e.ReadySentinel,
+		c:        e.ready,
 	}
 	if *verbose {
-		j.cmd.Stdout = os.Stdout
+		e.cmd.Stdout = os.Stdout
 	}
-	return j.cmd.Start()
+	return e.cmd.Start()
 }
 
-func (j *PubSub) WaitReady() {
-	<-j.ready
+func (e *Emulator) WaitReady() {
+	<-e.ready
 }
 
-func (j *PubSub) Stop() error {
+func (e *Emulator) Stop() error {
 	if err := syscall.Kill(-os.Getpid(), syscall.SIGTERM); err != nil {
 		return err
 	}
-	j.cmd.Wait()
+	e.cmd.Wait()
 	return nil
 }
 
-func (j *PubSub) Env() []string {
-	cmd := exec.Command("gcloud", "beta", "emulators", "pubsub", "env-init")
+func (e *Emulator) Env() []string {
+	cmd := exec.Command(e.EnvCommand[0], e.EnvCommand[1:]...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Fatalf("could not get env: %v", err)
@@ -141,59 +154,6 @@ func (r *watchFor) Write(data []byte) (n int, err error) {
 		r.done = true
 	}
 	return
-}
-
-type Datastore struct {
-	cmd   *exec.Cmd
-	ready chan struct{}
-}
-
-func (j *Datastore) Start() error {
-	if j.ready != nil {
-		return errors.New("datastore: already started")
-	}
-	j.ready = make(chan struct{})
-
-	j.cmd = exec.Command("gcloud", "-q", "beta", "emulators", "datastore", "start", "--no-legacy")
-	j.cmd.SysProcAttr = sysprocattr()
-	out := ioutil.Discard
-	if *verbose {
-		out = os.Stderr
-	}
-	j.cmd.Stderr = &watchFor{
-		base:     out,
-		sentinel: "is now running",
-		c:        j.ready,
-	}
-	if *verbose {
-		j.cmd.Stdout = os.Stdout
-	}
-	return j.cmd.Start()
-}
-
-func (j *Datastore) WaitReady() {
-	<-j.ready
-}
-
-func (j *Datastore) Stop() error {
-	if err := syscall.Kill(-os.Getpid(), syscall.SIGTERM); err != nil {
-		return err
-	}
-	j.cmd.Wait()
-	return nil
-}
-
-func (j *Datastore) Env() []string {
-	cmd := exec.Command("gcloud", "beta", "emulators", "datastore", "env-init")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Fatalf("could not get env: %v", err)
-	}
-	env := strings.Split(string(out), "\n")
-	for i, v := range env {
-		env[i] = strings.Replace(v, "export ", "", -1)
-	}
-	return env
 }
 
 func forwardSignals() {
