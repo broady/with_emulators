@@ -1,2 +1,2 @@
-    $ go get github.com/broady/with_emulators
-    $ with_emulators go run app_that_uses_datastore.go
+    $ go get -u github.com/broady/with_emulators
+    $ with_emulators go run $GOPATH/src/github.com/broady/with_emulators/example/main.go
