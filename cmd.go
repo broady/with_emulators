@@ -19,8 +19,19 @@ import (
 
 var verbose = flag.Bool("v", false, "Pipe stdout/stderr from emulators")
 
+func sysprocattr() *syscall.SysProcAttr {
+	return &syscall.SysProcAttr{
+		Setpgid: true,
+		Pgid:    os.Getpid(),
+	}
+}
+
 func main() {
 	flag.Parse()
+
+	if err := syscall.Setpgid(os.Getpid(), os.Getpid()); err != nil {
+		log.Fatalf("setpgid: %v", err)
+	}
 
 	datastore := &Datastore{}
 	if err := datastore.Start(); err != nil {
@@ -39,6 +50,7 @@ func main() {
 	env = append(env, pubsub.Env()...)
 
 	cmd := exec.Command(flag.Args()[0], flag.Args()[1:]...)
+	cmd.SysProcAttr = sysprocattr()
 	cmd.Env = env
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	cmdErr := cmd.Run()
@@ -66,7 +78,7 @@ func (j *PubSub) Start() error {
 	j.ready = make(chan struct{})
 
 	j.cmd = exec.Command("gcloud", "-q", "beta", "emulators", "pubsub", "start")
-	j.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	j.cmd.SysProcAttr = sysprocattr()
 	out := ioutil.Discard
 	if *verbose {
 		out = os.Stderr
@@ -145,7 +157,7 @@ func (j *Datastore) Start() error {
 	j.ready = make(chan struct{})
 
 	j.cmd = exec.Command("gcloud", "-q", "beta", "emulators", "datastore", "start", "--no-legacy")
-	j.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	j.cmd.SysProcAttr = sysprocattr()
 	out := ioutil.Discard
 	if *verbose {
 		out = os.Stderr
