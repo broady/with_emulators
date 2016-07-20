@@ -40,7 +40,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Next: %v", err)
 	}
-	log.Printf("Message: %s", msg.Data)
+	log.Printf("pubsub message: %s", msg.Data)
 	msg.Done(true)
 	it.Stop()
 
@@ -49,9 +49,16 @@ func main() {
 		log.Fatalf("datastore.NewClient: %v", err)
 	}
 	k := datastore.NewIncompleteKey(ctx, "Foo", nil)
-	if _, err := datastoreClient.Put(ctx, k, &Foo{F: "foo!"}); err != nil {
+	k, err = datastoreClient.Put(ctx, k, &Foo{F: "foo!"})
+	if err != nil {
 		log.Fatalf("Put: %v", err)
 	}
+
+	var f Foo
+	if err := datastoreClient.Get(ctx, k, &f); err != nil {
+		log.Fatalf("Get: %v", err)
+	}
+	log.Printf("datastore got %v", f)
 }
 
 type Foo struct {
