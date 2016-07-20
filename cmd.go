@@ -20,13 +20,6 @@ import (
 
 var verbose = flag.Bool("v", false, "Pipe stdout/stderr from emulators")
 
-func sysprocattr() *syscall.SysProcAttr {
-	return &syscall.SysProcAttr{
-		Setpgid: true,
-		Pgid:    os.Getpid(),
-	}
-}
-
 func main() {
 	flag.Parse()
 
@@ -74,6 +67,13 @@ func main() {
 	}
 	if cmdErr != nil {
 		log.Fatal(cmdErr)
+	}
+}
+
+func sysprocattr() *syscall.SysProcAttr {
+	return &syscall.SysProcAttr{
+		Setpgid: true,
+		Pgid:    os.Getpid(),
 	}
 }
 
@@ -172,5 +172,6 @@ func forwardSignals() {
 	signal.Notify(sigch,
 		syscall.SIGINT,
 		syscall.SIGTERM,
-		syscall.SIGHUP)
+		syscall.SIGHUP,
+	)
 }
