@@ -7,7 +7,9 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -15,14 +17,11 @@ import (
 	"syscall"
 )
 
-type Job interface {
-	Start() error
-	WaitReady()
-	Env() []string
-	Stop() error
-}
+var verbose = flag.Bool("v", false, "Pipe stdout/stderr from emulators")
 
 func main() {
+	flag.Parse()
+
 	datastore := &Datastore{}
 	if err := datastore.Start(); err != nil {
 		log.Fatalf("Could not start datastore: %v", err)
@@ -39,10 +38,9 @@ func main() {
 	env = append(env, datastore.Env()...)
 	env = append(env, pubsub.Env()...)
 
-	cmd := exec.Command(os.Args[1], os.Args[2:]...)
+	cmd := exec.Command(flag.Args()[0], flag.Args()[1:]...)
 	cmd.Env = env
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	cmdErr := cmd.Run()
 
 	if err := datastore.Stop(); err != nil {
@@ -69,12 +67,18 @@ func (j *PubSub) Start() error {
 
 	j.cmd = exec.Command("gcloud", "-q", "beta", "emulators", "pubsub", "start")
 	j.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	out := ioutil.Discard
+	if *verbose {
+		out = os.Stderr
+	}
 	j.cmd.Stderr = &watchFor{
-		base:     os.Stderr,
+		base:     out,
 		sentinel: "Server started, listening",
 		c:        j.ready,
 	}
-	j.cmd.Stdout = os.Stdout
+	if *verbose {
+		j.cmd.Stdout = os.Stdout
+	}
 	return j.cmd.Start()
 }
 
@@ -142,12 +146,18 @@ func (j *Datastore) Start() error {
 
 	j.cmd = exec.Command("gcloud", "-q", "beta", "emulators", "datastore", "start", "--no-legacy")
 	j.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	out := ioutil.Discard
+	if *verbose {
+		out = os.Stderr
+	}
 	j.cmd.Stderr = &watchFor{
-		base:     os.Stderr,
+		base:     out,
 		sentinel: "is now running",
 		c:        j.ready,
 	}
-	j.cmd.Stdout = os.Stdout
+	if *verbose {
+		j.cmd.Stdout = os.Stdout
+	}
 	return j.cmd.Start()
 }
 
