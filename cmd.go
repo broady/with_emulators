@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 	"syscall"
 )
@@ -32,6 +33,7 @@ func main() {
 	if err := syscall.Setpgid(os.Getpid(), os.Getpid()); err != nil {
 		log.Fatalf("setpgid: %v", err)
 	}
+	forwardSignals()
 
 	datastore := &Datastore{}
 	if err := datastore.Start(); err != nil {
@@ -99,11 +101,7 @@ func (j *PubSub) WaitReady() {
 }
 
 func (j *PubSub) Stop() error {
-	pgid, err := syscall.Getpgid(j.cmd.Process.Pid)
-	if err != nil {
-		return err
-	}
-	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
+	if err := syscall.Kill(-os.Getpid(), syscall.SIGTERM); err != nil {
 		return err
 	}
 	j.cmd.Wait()
@@ -178,11 +176,7 @@ func (j *Datastore) WaitReady() {
 }
 
 func (j *Datastore) Stop() error {
-	pgid, err := syscall.Getpgid(j.cmd.Process.Pid)
-	if err != nil {
-		return err
-	}
-	if err := syscall.Kill(-pgid, syscall.SIGTERM); err != nil {
+	if err := syscall.Kill(-os.Getpid(), syscall.SIGTERM); err != nil {
 		return err
 	}
 	j.cmd.Wait()
@@ -200,4 +194,23 @@ func (j *Datastore) Env() []string {
 		env[i] = strings.Replace(v, "export ", "", -1)
 	}
 	return env
+}
+
+func forwardSignals() {
+	pgroup, err := os.FindProcess(-os.Getpid())
+	if err != nil {
+		log.Fatalf("Could not find proc 0: %v", err)
+	}
+	sigch := make(chan os.Signal, 1)
+	go func() {
+		select {
+		case sig := <-sigch:
+			// Forward the signal.
+			pgroup.Signal(sig)
+		}
+	}()
+	signal.Notify(sigch,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGHUP)
 }
