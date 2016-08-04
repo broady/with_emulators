@@ -8,8 +8,8 @@ import (
 	"context"
 	"log"
 
-	"google.golang.org/cloud/datastore"
-	"google.golang.org/cloud/pubsub"
+	"cloud.google.com/go/datastore"
+	"cloud.google.com/go/pubsub"
 )
 
 func main() {
